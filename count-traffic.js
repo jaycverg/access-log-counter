@@ -2,19 +2,30 @@
 
 const lineByLine = require('n-readlines');
 
-const logFolders = ['logs/64', 'logs/65', 'logs/66'];
-const fs = require('fs');
-const { listenerCount } = require('process');
+const cliArgs = process.argv;
+let logDir = 'logs';
 
+if (cliArgs.length > 3 && cliArgs[2] === '--log-dir') {
+    logDir = cliArgs[3];
+}
+
+const fs = require('fs');
+const path = require('path');
 const countByDate = new Map();
 
-logFolders.forEach(folder => {
+const scanForLogs = (folder) => {
     fs.readdirSync(folder).forEach(file => {
+        file = path.resolve(folder, file);
         if (file.match(/\.gz$/)) {
             return;
         }
 
-        const liner = new lineByLine([folder, file].join('/'));
+        const stat = fs.statSync(file);
+        if (stat.isDirectory()) {
+            return scanForLogs(file);
+        }
+
+        const liner = new lineByLine(file);
         let line;
         while (line = liner.next()) {
             const parts = line.toString('ascii').split('\t');
@@ -24,7 +35,9 @@ logFolders.forEach(folder => {
             countByDate.set(date, count);
         }
     });
-});
+};
+
+scanForLogs(logDir);
 
 [...countByDate.keys()]
     .sort((a, b) => new Date(a) - new Date(b))
