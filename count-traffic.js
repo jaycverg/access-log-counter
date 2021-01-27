@@ -1,46 +1,69 @@
 #!/bin/env node
 
-const lineByLine = require('n-readlines');
+const commandLineArgs = require('command-line-args');
+const log = require('fancy-log');
+const { writeFileSync } = require('fs');
+const { join, resolve } = require('upath');
 
-const cliArgs = process.argv;
-let logDir = 'logs';
+const { getHTML, getTextTable, restrict, sort } = require('./lib/data.js');
+const { getFileList, parseFile } = require('./lib/file.js');
 
-if (cliArgs.length > 3 && cliArgs[2] === '--log-dir') {
-    logDir = cliArgs[3];
-}
+const checkDate = str => new Date(str);
 
-const fs = require('fs');
-const path = require('path');
-const countByDate = new Map();
-
-const scanForLogs = (folder) => {
-    fs.readdirSync(folder).forEach(file => {
-        file = path.resolve(folder, file);
-        if (file.match(/\.gz$/)) {
-            return;
-        }
-
-        const stat = fs.statSync(file);
-        if (stat.isDirectory()) {
-            return scanForLogs(file);
-        }
-
-        const liner = new lineByLine(file);
-        let line;
-        while (line = liner.next()) {
-            const parts = line.toString('ascii').split('\t');
-            const timestamp = parts[4];
-            const date = timestamp.split(':')[0].substring(4);
-            const count = (countByDate.get(date) || 0) + 1;
-            countByDate.set(date, count);
-        }
-    });
+const checkLogDir = str => {
+    const path = resolve(__dirname, str);
+    if (!existsSync(path)) {
+        throw new Error(`Selected log folder doesn't exist: ${path}`);
+    }
+    return path;
 };
 
-scanForLogs(logDir);
+const optionsDefaults = [
+    { name: "from", type: str => checkDate(str), defaultValue: null },
+    { name: "limit", type: Number, defaultValue: 0 },
+    { name: "log-dir", type: str => checkLogDir(str), defaultValue: resolve(__dirname, 'logs') },
+    { name: "output", type: String, defaultValue: "txt" },
+    { name: "pretty", type: Boolean },
+    { name: "to", type: str => checkDate(str), defaultValue: null },
+];
 
-[...countByDate.keys()]
-    .sort((a, b) => new Date(a) - new Date(b))
-    .forEach(date => {
-        console.log(date, countByDate.get(date));
+const options = commandLineArgs(optionsDefaults, { camelCase: true });
+
+(async() => {
+    let parsed = {
+        data: {},
+        extensions: []
+    };
+    let i = 0;
+
+    const fileList = getFileList(options.logDir, {
+        ...options,
+        i
     });
+
+    await Promise.all(fileList.map(path => parseFile(path, parsed)));
+
+    parsed.data = restrict(parsed.data, options);
+    parsed.data = sort(parsed.data);
+
+    Array.prototype.sort.apply(parsed.extensions);
+
+    let resultOpts = {
+        file: null,
+        data: null
+    };
+
+    switch (options.output) {
+        case 'html':
+            resultOpts = getHTML(parsed, options.pretty);
+            break;
+
+        default:
+            resultOpts = getTextTable(parsed, options.pretty);
+            break;
+    }
+
+    writeFileSync(resultOpts.file, resultOpts.data);
+    writeFileSync(join(__dirname, 'output', 'data.json'), JSON.stringify(parsed, null, ' '));
+    log(`See calculation result in ${resultOpts.file}`);
+})();
