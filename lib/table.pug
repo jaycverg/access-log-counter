@@ -92,37 +92,64 @@ body
     table
         thead
             tr
-                th Date
-                th Assets
-                th Content
-                th TOTAL
+                th(rowspan=2) Date
+                th(colspan=3) Assets
+                th(colspan=3) Content
+                th(colspan=2) TOTAL
+            tr
+                th Traffic
+                th Requests
+                th Avg.time
+                th Traffic
+                th Requests
+                th Avg.time
+                th Traffic
+                th Requests
         tbody
-            - var totalAssets = 0;
-            - var totalContent = 0;
+            - var totalSentAssets = 0;
+            - var totalSentContent = 0;
+            - var totalRequestsAssets = 0;
+            - var totalRequestsContent = 0;
+            - var avgTimeAssets = [];
+            - var avgTimeContent = [];
             each rowDate, date in data
-                - totalAssets += rowDate.bytesSentAssets;
-                - totalContent += rowDate.bytesSentContent;
+                - totalSentAssets += rowDate.assets.sent;
+                - totalSentContent += rowDate.content.sent;
+                - totalRequestsAssets += rowDate.assets.requests;
+                - totalRequestsContent += rowDate.content.requests;
+                - avgTimeAssets.push(rowDate.assets.averageTimeTaken);
+                - avgTimeContent.push(rowDate.content.averageTimeTaken);
                 tr
                     td= date
-                    td= pb(rowDate.bytesSentAssets, pretty)
-                    td= pb(rowDate.bytesSentContent, pretty)
-                    td= pb(rowDate.bytesSentAssets + rowDate.bytesSentContent, pretty)
+                    td= pb(rowDate.assets.sent, pretty)
+                    td= rowDate.assets.requests
+                    td= rowDate.assets.averageTimeTaken
+                    td= pb(rowDate.content.sent, pretty)
+                    td= rowDate.content.requests
+                    td= rowDate.content.averageTimeTaken
+                    td= pb(rowDate.assets.sent + rowDate.content.sent, pretty)
+                    td= (rowDate.assets.requests + rowDate.content.requests)
         tfoot
             tr
                 td TOTAL
-                td= pb(totalAssets, pretty)
-                td= pb(totalContent, pretty)
-                td= pb(totalAssets + totalContent, pretty)
+                td= pb(totalSentAssets, pretty)
+                td= totalRequestsAssets
+                td= (avgTimeAssets.reduce((a,c) => a + c, 0) / avgTimeAssets.length).toFixed(6)
+                td= pb(totalSentContent, pretty)
+                td= totalRequestsContent
+                td= (avgTimeContent.reduce((a,c) => a + c, 0) / avgTimeContent.length).toFixed(6)
+                td= pb(totalSentAssets + totalSentContent, pretty)
+                td= (totalRequestsAssets + totalRequestsContent)
 
     each rowDate, date in data
         section
             div.date-info
                 h2= date
-                p Total requests: #{rowDate.totalRequests}
+                p Total requests: #{rowDate.assets.requests + rowDate.content.requests}
                 p.sent
-                    | Bytes sent: !{pb(rowDate.totalBytesSent, pretty)}
-                    | (assets: !{pb(rowDate.bytesSentAssets, pretty)} / content: !{pb(rowDate.bytesSentContent, pretty)})
-                p.received Bytes received: !{pb(rowDate.totalBytesReceived, pretty)}
+                    | Bytes sent: !{pb(rowDate.assets.sent + rowDate.content.sent, pretty)}
+                    | (assets: !{pb(rowDate.assets.sent, pretty)} / content: !{pb(rowDate.content.sent, pretty)})
+                p.received Bytes received: !{pb(rowDate.assets.received + rowDate.content.received, pretty)}
 
             div.grid
                 div.file-types
@@ -148,8 +175,8 @@ body
                             p.domain-stats
                                 span.sent
                                     i.fas.fa-upload
-                                    | !{pb(rowDomain.totalBytesSent, pretty)}
-                                    small !{pb(rowDomain.bytesSentAssets, pretty)} / !{pb(rowDomain.bytesSentContent, pretty)}
+                                    | !{pb(rowDomain.assets.sent + rowDomain.content.sent, pretty)}
+                                    small !{pb(rowDomain.assets.sent, pretty)} / !{pb(rowDomain.content.sent, pretty)}
                                 span.received
                                     i.fas.fa-download
-                                    | !{pb(rowDomain.totalBytesReceived, pretty)}
+                                    | !{pb(rowDomain.assets.received + rowDomain.content.received, pretty)}

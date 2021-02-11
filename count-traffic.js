@@ -2,11 +2,11 @@
 
 const commandLineArgs = require('command-line-args');
 const log = require('fancy-log');
-const { writeFileSync } = require('fs');
-const { join, resolve } = require('upath');
+const {existsSync, readFileSync, writeFileSync} = require('fs');
+const {join, resolve} = require('upath');
 
-const { getHTML, getTextTable, restrict, sort } = require('./lib/data.js');
-const { getFileList, parseFile } = require('./lib/file.js');
+const {averageTimeTaken, getHTML, getTextTable, restrict, sort} = require('./lib/data.js');
+const {getFileList, parseFile} = require('./lib/file.js');
 
 const checkDate = str => new Date(str);
 
@@ -19,34 +19,48 @@ const checkLogDir = str => {
 };
 
 const optionsDefaults = [
-    { name: "from", type: str => checkDate(str), defaultValue: null },
-    { name: "limit", type: Number, defaultValue: 0 },
-    { name: "log-dir", type: str => checkLogDir(str), defaultValue: resolve(__dirname, 'logs') },
-    { name: "output", type: String, defaultValue: "txt" },
-    { name: "pretty", type: Boolean },
-    { name: "to", type: str => checkDate(str), defaultValue: null },
+    {name: "cached", type: Boolean},
+    {name: "from", type: str => checkDate(str), defaultValue: null},
+    {name: "limit", type: Number, defaultValue: 0},
+    {name: "log-dir", type: str => checkLogDir(str), defaultValue: resolve(__dirname, 'logs')},
+    {name: "output", type: String, defaultValue: "txt"},
+    {name: "pretty", type: Boolean},
+    {name: "to", type: str => checkDate(str), defaultValue: null},
 ];
 
-const options = commandLineArgs(optionsDefaults, { camelCase: true });
+const options = commandLineArgs(optionsDefaults, {camelCase: true});
 
-(async() => {
+(async () => {
     let parsed = {
         data: {},
         extensions: []
     };
-    let i = 0;
+    const dataFile = join(__dirname, 'output', 'data.json');
 
-    const fileList = getFileList(options.logDir, {
-        ...options,
-        i
-    });
+    if (!options.cached) {
+        let i = 0;
 
-    await Promise.all(fileList.map(path => parseFile(path, parsed)));
+        const fileList = getFileList(options.logDir, {
+            ...options,
+            i
+        });
 
-    parsed.data = restrict(parsed.data, options);
-    parsed.data = sort(parsed.data);
+        await Promise.all(fileList.map(path => parseFile(path, parsed)));
 
-    Array.prototype.sort.apply(parsed.extensions);
+        parsed.data = restrict(parsed.data, options);
+        parsed.data = sort(parsed.data);
+        parsed.data = averageTimeTaken(parsed.data);
+
+        Array.prototype.sort.apply(parsed.extensions);
+        writeFileSync(dataFile, JSON.stringify(parsed, null, ' '));
+    } else {
+        if(!existsSync(dataFile)) {
+            throw new Error(`Data file doesn't exist at ${dataFile}`);
+        }
+        try {
+            parsed = JSON.parse(readFileSync(dataFile, 'utf8'));
+        } catch(e) {}
+    }
 
     let resultOpts = {
         file: null,
@@ -64,6 +78,5 @@ const options = commandLineArgs(optionsDefaults, { camelCase: true });
     }
 
     writeFileSync(resultOpts.file, resultOpts.data);
-    writeFileSync(join(__dirname, 'output', 'data.json'), JSON.stringify(parsed, null, ' '));
     log(`See calculation result in ${resultOpts.file}`);
 })();
